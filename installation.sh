@@ -47,23 +47,6 @@ generate_env_file() {
     sed -i "s/{{sendgrid_api_key}}/${SENDGRID_API_KEY}/g" .env
 }
 
-# Display usage help
-usage() {
-    cat <<EOF
-Usage: $0 [options]
-
-Options:
-    -domain-name=<domain>       Set the top-level domain
-    -subdomain=<subdomain>      Set the subdomain
-    -ssl-email=<email>          Set the email for SSL certificate
-    -sendgrid-api-key=<key>     Set the SendGrid API key
-    -h, --help                  Display this help message
-
-If no arguments are provided, the script will prompt for input interactively.
-EOF
-    exit 0
-}
-
 # Check if a command exists
 check_command() {
     if ! command -v "$1" &> /dev/null; then
