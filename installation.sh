@@ -1,49 +1,108 @@
 #!/bin/bash
 set -e
 
-# Function to check if Docker is installed
-check_docker() {
-  if ! command -v docker &> /dev/null; then
-    echo "Docker is not installed. Please install Docker first."
-    exit 1
-  fi
+# Default values for environment variables
+DEFAULT_DOMAIN_NAME="sku.io"
+DEFAULT_SUBDOMAIN="dev2"
+DEFAULT_SSL_EMAIL="kalvin@mizzi.com"
+DEFAULT_SENDGRID_API_KEY="your_sendgrid_api_key"
+
+# Function to generate the .env file by replacing placeholders
+generate_env_file() {
+    if [ -f .env ]; then
+        echo "Removing existing .env file..."
+        if [ -w .env ]; then
+            rm .env
+        else
+            echo "Error: Insufficient permissions to remove .env file."
+            exit 1
+        fi
+    fi
+
+    echo "Generating .env file from .env.example..."
+    cp .env.example .env
+
+    # Replace placeholders in the .env file
+    sed -i "s/{{domain}}/${DOMAIN_NAME:-$DEFAULT_DOMAIN_NAME}/g" .env
+    sed -i "s/{{subdomain}}/${SUBDOMAIN:-$DEFAULT_SUBDOMAIN}/g" .env
+    sed -i "s/{{admin_email}}/${SSL_EMAIL:-$DEFAULT_SSL_EMAIL}/g" .env
+    sed -i "s/{{sendgrid_api_key}}/${SENDGRID_API_KEY:-$DEFAULT_SENDGRID_API_KEY}/g" .env
 }
 
-# Function to check if Docker Compose is installed
-check_docker_compose() {
-  if ! command -v docker-compose &> /dev/null; then
-    echo "Docker Compose is not installed. Please install Docker Compose first."
-    exit 1
-  fi
+# Display usage help
+usage() {
+    cat <<EOF
+Usage: $0 [options]
+
+Options:
+    -domain-name=<domain>       Set the top-level domain (default: $DEFAULT_DOMAIN_NAME)
+    -subdomain=<subdomain>      Set the subdomain (default: $DEFAULT_SUBDOMAIN)
+    -ssl-email=<email>          Set the email for SSL certificate (default: $DEFAULT_SSL_EMAIL)
+    -sendgrid-api-key=<key>     Set the SendGrid API key (default: $DEFAULT_SENDGRID_API_KEY)
+    -h, --help                  Display this help message
+EOF
+    exit 0
 }
 
-# Function to create required Docker volumes if they don't exist
-create_volumes() {
-  echo "Creating volumes if they don't exist..."
-  docker volume inspect traefik_data > /dev/null 2>&1 || docker volume create traefik_data
-  docker volume inspect n8n_data > /dev/null 2>&1 || docker volume create n8n_data
+# Parse command-line arguments
+parse_arguments() {
+    while [[ "$#" -gt 0 ]]; do
+        case $1 in
+            -domain-name=*) DOMAIN_NAME="${1#*=}" ;;
+            -subdomain=*) SUBDOMAIN="${1#*=}" ;;
+            -ssl-email=*) SSL_EMAIL="${1#*=}" ;;
+            -sendgrid-api-key=*) SENDGRID_API_KEY="${1#*=}" ;;
+            -h|--help) usage ;;
+            *) echo "Unknown parameter: $1"; usage ;;
+        esac
+        shift
+    done
+
+    # Ensure required arguments are provided
+    if [[ -z "$DOMAIN_NAME" || -z "$SUBDOMAIN" || -z "$SSL_EMAIL" || -z "$SENDGRID_API_KEY" ]]; then
+        echo "Error: Missing required arguments."
+        usage
+    fi
 }
 
-# Function to create required Docker network if it doesn't exist
-create_network() {
-  echo "Creating network if it doesn't exist..."
-  docker network inspect traefik-network > /dev/null 2>&1 || docker network create traefik-network
+# Check if a command exists
+check_command() {
+    if ! command -v "$1" &> /dev/null; then
+        echo "$1 is not installed. Please install $1 first."
+        exit 1
+    fi
 }
 
-# Function to start Docker Compose
-start_docker_compose() {
-  echo "Starting docker-compose..."
-  docker-compose up -d --build
+# Create a Docker resource if it doesn't exist
+create_docker_resource() {
+    local resource_type=$1
+    local resource_name=$2
+    local create_command=$3
+
+    if ! docker "$resource_type" inspect "$resource_name" &> /dev/null; then
+        echo "Creating Docker $resource_type: $resource_name..."
+        eval "$create_command"
+    fi
 }
 
+# Main function
 main() {
-  echo "Starting installation..."
-  check_docker
-  check_docker_compose
-  create_volumes
-  create_network
-  start_docker_compose
-  echo "Installation completed successfully."
+    echo "Starting installation..."
+    parse_arguments "$@"
+
+    check_command docker
+    check_command docker-compose
+
+    generate_env_file
+
+    create_docker_resource volume traefik_data "docker volume create traefik_data"
+    create_docker_resource volume n8n_data "docker volume create n8n_data"
+    create_docker_resource network traefik-network "docker network create traefik-network"
+
+    echo "Starting Docker Compose..."
+    sudo docker-compose up -d --build
+
+    echo "Installation completed successfully."
 }
 
-main
+main "$@"
