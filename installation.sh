@@ -1,32 +1,50 @@
 #!/bin/bash
 set -e
 
-# Default values for environment variables
-DEFAULT_DOMAIN_NAME="sku.io"
-DEFAULT_SUBDOMAIN="dev2"
-DEFAULT_SSL_EMAIL="kalvin@mizzi.com"
-DEFAULT_SENDGRID_API_KEY="your_sendgrid_api_key"
+# Function to prompt the user for input interactively
+prompt_for_input() {
+    echo "Please provide the following values:"
+
+    read -p "Enter the main domain (e.g., example.com): " DOMAIN_NAME
+    while [[ -z "$DOMAIN_NAME" || ! "$DOMAIN_NAME" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; do
+        echo "Invalid domain name. Please enter a valid domain (e.g., example.com)."
+        read -p "Enter the main domain (e.g., example.com): " DOMAIN_NAME
+    done
+
+    read -p "Enter the subdomain (e.g., app): " SUBDOMAIN
+    while [[ -z "$SUBDOMAIN" || ! "$SUBDOMAIN" =~ ^[a-zA-Z0-9.-]+$ ]]; do
+        echo "Invalid subdomain. Please enter a valid subdomain (e.g., app)."
+        read -p "Enter the subdomain (e.g., app): " SUBDOMAIN
+    done
+
+    read -p "Enter the email for SSL certificate (e.g., admin@example.com): " SSL_EMAIL
+    while [[ -z "$SSL_EMAIL" || ! "$SSL_EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; do
+        echo "Invalid email format. Please enter a valid email (e.g., admin@example.com)."
+        read -p "Enter the email for SSL certificate (e.g., admin@example.com): " SSL_EMAIL
+    done
+
+    read -p "Enter the SendGrid API key: " SENDGRID_API_KEY
+    while [[ -z "$SENDGRID_API_KEY" ]]; do
+        echo "SendGrid API key cannot be empty. Please try again."
+        read -p "Enter the SendGrid API key: " SENDGRID_API_KEY
+    done
+}
 
 # Function to generate the .env file by replacing placeholders
 generate_env_file() {
     if [ -f .env ]; then
         echo "Removing existing .env file..."
-        if [ -w .env ]; then
-            rm .env
-        else
-            echo "Error: Insufficient permissions to remove .env file."
-            exit 1
-        fi
+        rm .env
     fi
 
     echo "Generating .env file from .env.example..."
     cp .env.example .env
 
     # Replace placeholders in the .env file
-    sed -i "s/{{domain}}/${DOMAIN_NAME:-$DEFAULT_DOMAIN_NAME}/g" .env
-    sed -i "s/{{subdomain}}/${SUBDOMAIN:-$DEFAULT_SUBDOMAIN}/g" .env
-    sed -i "s/{{admin_email}}/${SSL_EMAIL:-$DEFAULT_SSL_EMAIL}/g" .env
-    sed -i "s/{{sendgrid_api_key}}/${SENDGRID_API_KEY:-$DEFAULT_SENDGRID_API_KEY}/g" .env
+    sed -i "s/{{domain}}/${DOMAIN_NAME}/g" .env
+    sed -i "s/{{subdomain}}/${SUBDOMAIN}/g" .env
+    sed -i "s/{{admin_email}}/${SSL_EMAIL}/g" .env
+    sed -i "s/{{sendgrid_api_key}}/${SENDGRID_API_KEY}/g" .env
 }
 
 # Display usage help
@@ -35,34 +53,15 @@ usage() {
 Usage: $0 [options]
 
 Options:
-    -domain-name=<domain>       Set the top-level domain (default: $DEFAULT_DOMAIN_NAME)
-    -subdomain=<subdomain>      Set the subdomain (default: $DEFAULT_SUBDOMAIN)
-    -ssl-email=<email>          Set the email for SSL certificate (default: $DEFAULT_SSL_EMAIL)
-    -sendgrid-api-key=<key>     Set the SendGrid API key (default: $DEFAULT_SENDGRID_API_KEY)
+    -domain-name=<domain>       Set the top-level domain
+    -subdomain=<subdomain>      Set the subdomain
+    -ssl-email=<email>          Set the email for SSL certificate
+    -sendgrid-api-key=<key>     Set the SendGrid API key
     -h, --help                  Display this help message
+
+If no arguments are provided, the script will prompt for input interactively.
 EOF
     exit 0
-}
-
-# Parse command-line arguments
-parse_arguments() {
-    while [[ "$#" -gt 0 ]]; do
-        case $1 in
-            -domain-name=*) DOMAIN_NAME="${1#*=}" ;;
-            -subdomain=*) SUBDOMAIN="${1#*=}" ;;
-            -ssl-email=*) SSL_EMAIL="${1#*=}" ;;
-            -sendgrid-api-key=*) SENDGRID_API_KEY="${1#*=}" ;;
-            -h|--help) usage ;;
-            *) echo "Unknown parameter: $1"; usage ;;
-        esac
-        shift
-    done
-
-    # Ensure required arguments are provided
-    if [[ -z "$DOMAIN_NAME" || -z "$SUBDOMAIN" || -z "$SSL_EMAIL" || -z "$SENDGRID_API_KEY" ]]; then
-        echo "Error: Missing required arguments."
-        usage
-    fi
 }
 
 # Check if a command exists
@@ -88,7 +87,15 @@ create_docker_resource() {
 # Main function
 main() {
     echo "Starting installation..."
-    parse_arguments "$@"
+
+    # prompt interactively
+    prompt_for_input
+
+    # Ensure required variables are set
+    if [[ -z "$DOMAIN_NAME" || -z "$SUBDOMAIN" || -z "$SSL_EMAIL" || -z "$SENDGRID_API_KEY" ]]; then
+        echo "Error: Missing required values. Please provide all required inputs."
+        exit 1
+    fi
 
     check_command docker
     check_command docker-compose
@@ -100,7 +107,7 @@ main() {
     create_docker_resource network traefik-network "docker network create traefik-network"
 
     echo "Starting Docker Compose..."
-    sudo docker-compose up -d --build
+    docker-compose up -d --build
 
     echo "Installation completed successfully."
 }
