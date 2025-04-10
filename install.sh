@@ -76,6 +76,35 @@ create_docker_resource() {
     fi
 }
 
+# Create /n8n target directory and copy necessary files
+setup_n8n_directory() {
+    local target_dir="/n8n"
+
+    echo "Setting up /n8n directory..."
+    if [ ! -d "$target_dir" ]; then
+        mkdir -p "$target_dir"
+        echo "Created directory: $target_dir"
+    fi
+
+    echo "Copying files to $target_dir..."
+    cp .env "$target_dir/"
+    cp docker-compose.yml "$target_dir/"
+    cp Dockerfile "$target_dir/"
+    cp upgrade.sh "$target_dir/"
+
+    echo "Files copied successfully to $target_dir."
+
+    echo "Creating /n8n_data directory and setting permissions..."
+    if [ ! -d "/n8n_data" ]; then
+        mkdir -p /n8n_data
+        chown 1000:1000 /n8n_data
+        echo "Directory /n8n_data created and permissions set."
+    else
+        echo "Directory /n8n_data already exists. Skipping creation."
+    fi
+    echo "Directory /n8n_data created and permissions set."
+}
+
 # Main function
 main() {
     echo "Starting installation..."
@@ -105,8 +134,9 @@ main() {
 
     generate_env_file
 
+    setup_n8n_directory
+
     create_docker_resource volume traefik_data "docker volume create traefik_data"
-    create_docker_resource volume n8n_data "docker volume create n8n_data"
     create_docker_resource network traefik-network "docker network create traefik-network"
 
     echo "Starting Docker Compose..."

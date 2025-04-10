@@ -65,10 +65,9 @@ services:
     networks:
       - traefik-network
     volumes:
-      - n8n_data:/home/node/.n8n
+      - /n8n_data:/home/node/.n8n
 
 volumes:
-  n8n_data:
   traefik_data:
     external: true
 
