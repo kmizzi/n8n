@@ -47,12 +47,21 @@ generate_env_file() {
     sed -i "s/{{sendgrid_api_key}}/${SENDGRID_API_KEY}/g" .env
 }
 
-# Check if a command exists
-check_command() {
-    if ! command -v "$1" &> /dev/null; then
-        echo "$1 is not installed. Please install $1 first."
-        exit 1
-    fi
+# Display usage help
+usage() {
+    cat <<EOF
+Usage: $0 [options]
+
+Options:
+    -domain-name=<domain>       Set the top-level domain
+    -subdomain=<subdomain>      Set the subdomain
+    -ssl-email=<email>          Set the email for SSL certificate
+    -sendgrid-api-key=<key>     Set the SendGrid API key
+    -h, --help                  Display this help message
+
+If no arguments are provided, the script will prompt for input interactively.
+EOF
+    exit 0
 }
 
 # Create a Docker resource if it doesn't exist
@@ -80,8 +89,19 @@ main() {
         exit 1
     fi
 
-    check_command docker
-    check_command docker-compose
+    # Check if Docker is installed
+    if ! command -v docker &> /dev/null; then
+        echo "Docker is not installed. Installing Docker..."
+        if [ "$(uname)" == "Linux" ]; then
+            curl -fsSL https://get.docker.com -o get-docker.sh
+            sh get-docker.sh
+            rm get-docker.sh
+            echo "Docker installed successfully."
+        else
+            echo "Unsupported OS. Please install Docker manually."
+            exit 1
+        fi
+    fi
 
     generate_env_file
 
@@ -90,8 +110,7 @@ main() {
     create_docker_resource network traefik-network "docker network create traefik-network"
 
     echo "Starting Docker Compose..."
-    docker-compose up -d --build
-
+    docker compose up -d --build
     echo "Installation completed successfully."
 }
 
